@@ -9,10 +9,12 @@ enum class der_type {
     ia5string,
     obj_id,
     context_specific,
-    set
+    set,
+    null
 };
 
 #define DER_INTEGER             0x02
+#define DER_NULL                0x05
 #define DER_OBJ_ID              0x06
 #define DER_IA5STRING           0x16
 #define DER_SEQUENCE            0x30
@@ -50,6 +52,7 @@ public:
     der(const obj_id& oid) : type(der_type::obj_id), value(oid) { }
     der(const context_specific& cs) : type(der_type::context_specific), value(cs) { }
     der(const der_set& set) : type(der_type::set), value(set) { }
+    der(nullptr_t) : type(der_type::null) { }
 
     template<typename T>
     void emplace(const T& t) {

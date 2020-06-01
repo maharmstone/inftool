@@ -4,6 +4,8 @@ using namespace std;
 
 static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
 static const obj_id ms_cert_trust_list{1, 3, 6, 1, 4, 1, 311, 10, 1};
+static const obj_id ms_catalogue_list{1, 3, 6, 1, 4, 1, 311, 12, 1, 1};
+static const obj_id ms_catalogue_list_member{1, 3, 6, 1, 4, 1, 311, 12, 1, 2};
 
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
@@ -186,6 +188,16 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::null: {
+            unsigned int len = length();
+            uint8_t c = DER_NULL;
+
+            out.write((char*)&c, sizeof(unsigned char));
+            der_write_int(out, len);
+
+            break;
+        }
     }
 }
 
@@ -258,6 +270,9 @@ unsigned int der::length() const {
 
             return len;
         }
+
+        case der_type::null:
+            return 0;
     }
 
     return 0;
@@ -266,7 +281,13 @@ unsigned int der::length() const {
 static void main2() {
     der cert_trust_list{vector<der>{}};
 
-    // FIXME
+    cert_trust_list.emplace(vector<der>{ms_catalogue_list});
+//     OCTET STRING (16 byte) 5E0B5227B866B144A450DFAA154B671B // list identifier
+//     UTCTime 2020-01-28 21:16:11 UTC // effective date
+
+    cert_trust_list.emplace(vector<der>{ms_catalogue_list_member, nullptr});
+//     SEQUENCE (17 elem) // entries
+//     [0] (1 elem) // key-value store
 
     der main_seq{vector<der>{}};
 
