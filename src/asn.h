@@ -10,10 +10,12 @@ enum class der_type {
     obj_id,
     context_specific,
     set,
-    null
+    null,
+    octet_string
 };
 
 #define DER_INTEGER             0x02
+#define DER_OCTET_STRING        0x04
 #define DER_NULL                0x05
 #define DER_OBJ_ID              0x06
 #define DER_IA5STRING           0x16
@@ -44,6 +46,13 @@ public:
     std::vector<der> els;
 };
 
+class octet_string {
+public:
+    octet_string(const std::string& s) : s(s) { }
+
+    std::string s;
+};
+
 class der {
 public:
     der(const std::vector<der>& s) : type(der_type::sequence), value(s) { }
@@ -53,6 +62,7 @@ public:
     der(const context_specific& cs) : type(der_type::context_specific), value(cs) { }
     der(const der_set& set) : type(der_type::set), value(set) { }
     der(nullptr_t) : type(der_type::null) { }
+    der(const octet_string& os) : type(der_type::octet_string), value(os.s) { }
 
     template<typename T>
     void emplace(const T& t) {

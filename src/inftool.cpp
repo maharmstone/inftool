@@ -198,6 +198,16 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::octet_string: {
+            char c = DER_OCTET_STRING;
+
+            out.write(&c, sizeof(unsigned char));
+            der_write_int(out, length());
+            out.write(get<string>(value).data(), get<string>(value).length());
+
+            break;
+        }
     }
 }
 
@@ -221,6 +231,7 @@ unsigned int der::length() const {
             return der_int_length(get<int64_t>(value));
 
         case der_type::ia5string:
+        case der_type::octet_string:
             return (unsigned int)get<string>(value).length();
 
         case der_type::obj_id: {
@@ -282,12 +293,19 @@ static void main2() {
     der cert_trust_list{vector<der>{}};
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list});
+    cert_trust_list.emplace(octet_string{"\x5E\x0B\x52\x27\xB8\x66\xB1\x44\xA4\x50\xDF\xAA\x15\x4B\x67\x1B"}); // FIXME - hash? ("list identifier")
 //     OCTET STRING (16 byte) 5E0B5227B866B144A450DFAA154B671B // list identifier
 //     UTCTime 2020-01-28 21:16:11 UTC // effective date
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list_member, nullptr});
-//     SEQUENCE (17 elem) // entries
-//     [0] (1 elem) // key-value store
+
+    der files{vector<der>{}}; // FIXME
+
+    cert_trust_list.emplace(files);
+
+    der kv_store{vector<der>{}}; // FIXME
+
+    cert_trust_list.emplace(context_specific{kv_store});
 
     der main_seq{vector<der>{}};
 
