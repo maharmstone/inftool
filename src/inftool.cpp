@@ -2,6 +2,8 @@
 
 using namespace std;
 
+static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
+
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
         if (v < 0x80)
@@ -117,6 +119,44 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::obj_id: {
+            uint8_t c = DER_OBJ_ID;
+            const auto& obj = get<obj_id>(value);
+
+            out.write((const char*)&c, sizeof(unsigned char));
+            der_write_int(out, length());
+
+            c = (uint8_t)((obj.nums[0] * 40) + obj.nums[1]);
+            out.write((const char*)&c, sizeof(unsigned char));
+
+            for (unsigned int i = 2; i < obj.nums.size(); i++) {
+                auto n = obj.nums[i];
+
+                if (n < 0x80) {
+                    auto v = (uint8_t)n;
+
+                    out.write((const char*)&v, sizeof(unsigned char));
+                } else if (n < 0x4000) {
+                    uint16_t v;
+
+                    v = (uint16_t)(0x8000 | ((n & 0x3f80) << 1) | (n & 0x7f));
+                    v = __builtin_bswap16(v);
+
+                    out.write((const char*)&v, sizeof(uint16_t));
+                } else if (n < 0x200000) {
+                    uint32_t v;
+
+                    v = 0x808000 | ((n & 0x1fc000) << 2) | ((n & 0x3f80) << 1) | (n & 0x7f);
+                    v = __builtin_bswap32(v);
+
+                    out.write((const char*)&v + 1, 3);
+                } else
+                    throw runtime_error("Value out of range.");
+            }
+
+            break;
+        }
     }
 }
 
@@ -142,9 +182,28 @@ unsigned int der::length() const {
         case der_type::ia5string:
             return (unsigned int)get<string>(value).length();
 
-        default:
-            return 0;
+        case der_type::obj_id: {
+            unsigned int len = 1;
+            const auto& obj = get<obj_id>(value);
+
+            for (unsigned int i = 2; i < obj.nums.size(); i++) {
+                auto n = obj.nums[i];
+
+                if (n < 0x80)
+                    len++;
+                else if (n < 0x4000)
+                    len += 2;
+                else if (n < 0x200000)
+                    len += 3;
+                else
+                    throw runtime_error("Value out of range.");
+            }
+
+            return len;
+        }
     }
+
+    return 0;
 }
 
 static void main2() {
@@ -152,6 +211,7 @@ static void main2() {
 
     test.emplace(5);
     test.emplace("Anybody there?");
+    test.emplace(pkcs7_rsa);
 
     test.dump(cout);
 }
