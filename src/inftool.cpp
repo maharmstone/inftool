@@ -208,6 +208,24 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::utc_time: {
+            char c = DER_UTCTIME;
+            auto t = chrono::system_clock::to_time_t(get<chrono::system_clock::time_point>(value));
+            struct tm tm;
+            char s[14];
+
+            gmtime_r(&t, &tm);
+
+            sprintf(s, "%02u%02u%02u%02u%02u%02uZ", tm.tm_year % 100, tm.tm_mon + 1, tm.tm_mday,
+                    tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+            out.write(&c, sizeof(unsigned char));
+            der_write_int(out, length());
+            out.write(s, sizeof(s) - 1);
+
+            break;
+        }
     }
 }
 
@@ -284,6 +302,9 @@ unsigned int der::length() const {
 
         case der_type::null:
             return 0;
+
+        case der_type::utc_time:
+            return 13;
     }
 
     return 0;
@@ -294,8 +315,7 @@ static void main2() {
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list});
     cert_trust_list.emplace(octet_string{"\x5E\x0B\x52\x27\xB8\x66\xB1\x44\xA4\x50\xDF\xAA\x15\x4B\x67\x1B"}); // FIXME - hash? ("list identifier")
-//     OCTET STRING (16 byte) 5E0B5227B866B144A450DFAA154B671B // list identifier
-//     UTCTime 2020-01-28 21:16:11 UTC // effective date
+    cert_trust_list.emplace(chrono::system_clock::now());
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list_member, nullptr});
 

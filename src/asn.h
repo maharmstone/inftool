@@ -2,6 +2,7 @@
 #include <vector>
 #include <variant>
 #include <iostream>
+#include <chrono>
 
 enum class der_type {
     sequence,
@@ -11,7 +12,8 @@ enum class der_type {
     context_specific,
     set,
     null,
-    octet_string
+    octet_string,
+    utc_time
 };
 
 #define DER_INTEGER             0x02
@@ -19,6 +21,7 @@ enum class der_type {
 #define DER_NULL                0x05
 #define DER_OBJ_ID              0x06
 #define DER_IA5STRING           0x16
+#define DER_UTCTIME             0x17
 #define DER_SEQUENCE            0x30
 #define DER_SET                 0x31
 #define DER_CONTEXT_SPECIFIC    0xa0
@@ -63,6 +66,7 @@ public:
     der(const der_set& set) : type(der_type::set), value(set) { }
     der(nullptr_t) : type(der_type::null) { }
     der(const octet_string& os) : type(der_type::octet_string), value(os.s) { }
+    der(const std::chrono::system_clock::time_point& time) : type(der_type::utc_time), value(time) { }
 
     template<typename T>
     void emplace(const T& t) {
@@ -77,5 +81,6 @@ public:
     unsigned int length() const;
 
     der_type type;
-    std::variant<std::vector<der>, int64_t, std::string, obj_id, context_specific, der_set> value;
+    std::variant<std::vector<der>, int64_t, std::string, obj_id, context_specific,
+                 der_set, std::chrono::system_clock::time_point> value;
 };
