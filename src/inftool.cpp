@@ -3,6 +3,7 @@
 using namespace std;
 
 static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
+static const obj_id ms_cert_trust_list{1, 3, 6, 1, 4, 1, 311, 10, 1};
 
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
@@ -171,6 +172,20 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::set: {
+            unsigned int len = length();
+            uint8_t c = DER_SET;
+
+            out.write((char*)&c, sizeof(unsigned char));
+            der_write_int(out, len);
+
+            for (const auto& v : get<der_set>(value).els) {
+                v.dump(out);
+            }
+
+            break;
+        }
     }
 }
 
@@ -229,22 +244,40 @@ unsigned int der::length() const {
 
             return len;
         }
+
+        case der_type::set: {
+            unsigned int len = 0;
+
+            for (const auto& v : get<der_set>(value).els) {
+                unsigned int item_len = v.length();
+
+                len++;
+                len += der_int_length(item_len);
+                len += v.length();
+            }
+
+            return len;
+        }
     }
 
     return 0;
 }
 
 static void main2() {
-    der test(vector<der>{});
+    der cert_trust_list{vector<der>{}};
 
-    test.emplace(5);
-    test.emplace("Anybody there?");
-    test.emplace(pkcs7_rsa);
+    // FIXME
 
-    test.emplace(pkcs7_rsa);
-    test.emplace(context_specific{der{"a"}, der{1}});
+    der main_seq{vector<der>{}};
 
-    test.dump(cout);
+    main_seq.emplace(1);
+    main_seq.emplace(der_set{});
+    main_seq.emplace(vector<der>{ms_cert_trust_list, context_specific{cert_trust_list}});
+    main_seq.emplace(der_set{});
+
+    der main{vector<der>{pkcs7_rsa, context_specific{main_seq}}};
+
+    main.dump(cout);
 }
 
 int main() {
