@@ -157,6 +157,20 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::context_specific: {
+            unsigned int len = length();
+            uint8_t c = DER_CONTEXT_SPECIFIC;
+
+            out.write((char*)&c, sizeof(unsigned char));
+            der_write_int(out, len);
+
+            for (const auto& v : get<context_specific>(value).els) {
+                v.dump(out);
+            }
+
+            break;
+        }
     }
 }
 
@@ -201,6 +215,20 @@ unsigned int der::length() const {
 
             return len;
         }
+
+        case der_type::context_specific: {
+            unsigned int len = 0;
+
+            for (const auto& v : get<context_specific>(value).els) {
+                unsigned int item_len = v.length();
+
+                len++;
+                len += der_int_length(item_len);
+                len += v.length();
+            }
+
+            return len;
+        }
     }
 
     return 0;
@@ -212,6 +240,9 @@ static void main2() {
     test.emplace(5);
     test.emplace("Anybody there?");
     test.emplace(pkcs7_rsa);
+
+    test.emplace(pkcs7_rsa);
+    test.emplace(context_specific{der{"a"}, der{1}});
 
     test.dump(cout);
 }
