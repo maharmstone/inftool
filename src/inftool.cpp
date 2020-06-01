@@ -1,4 +1,5 @@
 #include "asn.h"
+#include <sstream>
 
 using namespace std;
 
@@ -6,6 +7,7 @@ static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
 static const obj_id ms_cert_trust_list{1, 3, 6, 1, 4, 1, 311, 10, 1};
 static const obj_id ms_catalogue_list{1, 3, 6, 1, 4, 1, 311, 12, 1, 1};
 static const obj_id ms_catalogue_list_member{1, 3, 6, 1, 4, 1, 311, 12, 1, 2};
+static const obj_id ms_catalogue_name_value{1, 3, 6, 1, 4, 1, 311, 12, 2, 1};
 
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
@@ -43,6 +45,25 @@ static unsigned int der_int_length(int64_t v) {
         else
             return 8;
     }
+}
+
+static unsigned int der_length_length(uint64_t v) {
+    if (v < 0x80)
+        return 1;
+    else if (v < 0x8000)
+        return 3;
+    else if (v < 0x800000)
+        return 4;
+    else if (v < 0x80000000)
+        return 5;
+    else if (v < 0x8000000000)
+        return 6;
+    else if (v < 0x800000000000)
+        return 7;
+    else if (v < 0x80000000000000)
+        return 8;
+    else
+        return 9;
 }
 
 static void der_write_int(ostream& out, int64_t v) {
@@ -87,6 +108,53 @@ static void der_write_int(ostream& out, int64_t v) {
     }
 }
 
+static void der_write_length(ostream& out, uint64_t v) {
+    uint64_t c;
+    uint8_t c2;
+
+    if (v < 0x80) {
+        c2 = (uint8_t)v;
+        out.write((char*)&c2, 1);
+        return;
+    }
+
+    c = __builtin_bswap64((uint64_t)v);
+
+    if (v < 0x80) {
+        c2 = 0x81;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 7, 1);
+    } else if (v < 0x8000) {
+        c2 = 0x82;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 6, 2);
+    } else if (v < 0x800000) {
+        c2 = 0x83;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 5, 3);
+    } else if (v < 0x80000000) {
+        c2 = 0x84;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 4, 4);
+    } else if (v < 0x8000000000) {
+        c2 = 0x85;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 3, 5);
+    } else if (v < 0x800000000000) {
+        c2 = 0x86;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 2, 6);
+    } else if (v < 0x80000000000000) {
+        c2 = 0x87;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c + 1, 7);
+    } else {
+        c2 = 0x88;
+        out.write((char*)&c2, 1);
+        out.write((const char*)&c, 8);
+    }
+}
+
 void der::dump(ostream& out) const {
     switch (type) {
         case der_type::sequence: {
@@ -94,7 +162,7 @@ void der::dump(ostream& out) const {
             char c = DER_SEQUENCE;
 
             out.write(&c, sizeof(unsigned char));
-            der_write_int(out, len);
+            der_write_length(out, len);
 
             for (const auto& v : get<vector<der>>(value)) {
                 v.dump(out);
@@ -107,7 +175,7 @@ void der::dump(ostream& out) const {
             char c = DER_INTEGER;
 
             out.write(&c, sizeof(unsigned char));
-            der_write_int(out, length());
+            der_write_length(out, length());
             der_write_int(out, get<int64_t>(value));
 
             break;
@@ -117,7 +185,7 @@ void der::dump(ostream& out) const {
             char c = DER_IA5STRING;
 
             out.write(&c, sizeof(unsigned char));
-            der_write_int(out, length());
+            der_write_length(out, length());
             out.write(get<string>(value).data(), get<string>(value).length());
 
             break;
@@ -128,7 +196,7 @@ void der::dump(ostream& out) const {
             const auto& obj = get<obj_id>(value);
 
             out.write((const char*)&c, sizeof(unsigned char));
-            der_write_int(out, length());
+            der_write_length(out, length());
 
             c = (uint8_t)((obj.nums[0] * 40) + obj.nums[1]);
             out.write((const char*)&c, sizeof(unsigned char));
@@ -166,7 +234,7 @@ void der::dump(ostream& out) const {
             uint8_t c = DER_CONTEXT_SPECIFIC;
 
             out.write((char*)&c, sizeof(unsigned char));
-            der_write_int(out, len);
+            der_write_length(out, len);
 
             for (const auto& v : get<context_specific>(value).els) {
                 v.dump(out);
@@ -180,7 +248,7 @@ void der::dump(ostream& out) const {
             uint8_t c = DER_SET;
 
             out.write((char*)&c, sizeof(unsigned char));
-            der_write_int(out, len);
+            der_write_length(out, len);
 
             for (const auto& v : get<der_set>(value).els) {
                 v.dump(out);
@@ -194,7 +262,7 @@ void der::dump(ostream& out) const {
             uint8_t c = DER_NULL;
 
             out.write((char*)&c, sizeof(unsigned char));
-            der_write_int(out, len);
+            der_write_length(out, len);
 
             break;
         }
@@ -203,7 +271,7 @@ void der::dump(ostream& out) const {
             char c = DER_OCTET_STRING;
 
             out.write(&c, sizeof(unsigned char));
-            der_write_int(out, length());
+            der_write_length(out, length());
             out.write(get<string>(value).data(), get<string>(value).length());
 
             break;
@@ -221,8 +289,24 @@ void der::dump(ostream& out) const {
                     tm.tm_hour, tm.tm_min, tm.tm_sec);
 
             out.write(&c, sizeof(unsigned char));
-            der_write_int(out, length());
+            der_write_length(out, length());
             out.write(s, sizeof(s) - 1);
+
+            break;
+        }
+
+        case der_type::bmp_string: {
+            char c = DER_BMPSTRING;
+            const auto& us = get<u16string>(value);
+
+            out.write(&c, sizeof(unsigned char));
+            der_write_length(out, length());
+
+            for (const auto& c : us) {
+                char16_t v = __builtin_bswap16(c);
+
+                out.write((char*)&v, sizeof(char16_t));
+            }
 
             break;
         }
@@ -238,7 +322,7 @@ unsigned int der::length() const {
                 unsigned int item_len = v.length();
 
                 len++;
-                len += der_int_length(item_len);
+                len += der_length_length(item_len);
                 len += v.length();
             }
 
@@ -279,7 +363,7 @@ unsigned int der::length() const {
                 unsigned int item_len = v.length();
 
                 len++;
-                len += der_int_length(item_len);
+                len += der_length_length(item_len);
                 len += v.length();
             }
 
@@ -293,7 +377,7 @@ unsigned int der::length() const {
                 unsigned int item_len = v.length();
 
                 len++;
-                len += der_int_length(item_len);
+                len += der_length_length(item_len);
                 len += v.length();
             }
 
@@ -305,9 +389,31 @@ unsigned int der::length() const {
 
         case der_type::utc_time:
             return 13;
+
+        case der_type::bmp_string:
+            return (unsigned int)(get<u16string>(value).length() * sizeof(char16_t));
     }
 
     return 0;
+}
+
+static void add_kv_item(der& store, const u16string& key, const u16string& value, bool blob) {
+    der seq{vector<der>{ms_catalogue_name_value}};
+    der val{vector<der>{}};
+
+    val.emplace(key);
+    val.emplace(0x10010001);
+    val.emplace(octet_string{value});
+
+    if (blob) {
+        stringstream ss;
+        val.dump(ss);
+
+        seq.emplace(octet_string{ss.str()});
+    } else
+        seq.emplace(der_set{val});
+
+    store.emplace(seq);
 }
 
 static void main2() {
@@ -323,7 +429,11 @@ static void main2() {
 
     cert_trust_list.emplace(files);
 
-    der kv_store{vector<der>{}}; // FIXME
+    der kv_store{vector<der>{}};
+
+    add_kv_item(kv_store, u"OS", u"XPX86,XPX64,VistaX86,VistaX64,7X86,7X64,8X86,8X64,8ARM,_v63,_v63_X64,_v63_ARM,_v100,_v100_X64", true);
+    add_kv_item(kv_store, u"HWID2", u"root\\btrfs", true);
+    add_kv_item(kv_store, u"HWID1", u"btrfsvolume", true);
 
     cert_trust_list.emplace(context_specific{kv_store});
 

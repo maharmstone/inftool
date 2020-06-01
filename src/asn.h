@@ -13,7 +13,8 @@ enum class der_type {
     set,
     null,
     octet_string,
-    utc_time
+    utc_time,
+    bmp_string
 };
 
 #define DER_INTEGER             0x02
@@ -22,6 +23,7 @@ enum class der_type {
 #define DER_OBJ_ID              0x06
 #define DER_IA5STRING           0x16
 #define DER_UTCTIME             0x17
+#define DER_BMPSTRING           0x1e
 #define DER_SEQUENCE            0x30
 #define DER_SET                 0x31
 #define DER_CONTEXT_SPECIFIC    0xa0
@@ -52,6 +54,7 @@ public:
 class octet_string {
 public:
     octet_string(const std::string& s) : s(s) { }
+    octet_string(const std::u16string& us) : s((char*)us.data(), (us.length() + 1) * sizeof(char16_t)) { }
 
     std::string s;
 };
@@ -67,6 +70,7 @@ public:
     der(nullptr_t) : type(der_type::null) { }
     der(const octet_string& os) : type(der_type::octet_string), value(os.s) { }
     der(const std::chrono::system_clock::time_point& time) : type(der_type::utc_time), value(time) { }
+    der(const std::u16string& us) : type(der_type::bmp_string), value(us) { }
 
     template<typename T>
     void emplace(const T& t) {
@@ -82,5 +86,5 @@ public:
 
     der_type type;
     std::variant<std::vector<der>, int64_t, std::string, obj_id, context_specific,
-                 der_set, std::chrono::system_clock::time_point> value;
+                 der_set, std::chrono::system_clock::time_point, std::u16string> value;
 };
