@@ -499,15 +499,15 @@ static void add_file(der& seq, const u16string& fn, const u16string& os_attr, co
             ms_indirect_data_context,
             der_set{
                 vector<der>{
-                    vector<der>{
-                        ms_spc_pe_image_data,
-                        vector<der>{
-                            bit_string(3, 5)
+//                     vector<der>{
+//                         ms_spc_pe_image_data,
+//                         vector<der>{
+//                             bit_string(3, 5)
 //                         [0] (1 elem)
 //                             [2] (1 elem)
 //                                 [0] (28 byte) 003C003C003C004F00620073006F006C006500740065003E003E003E
-                        }
-                    },
+//                         }
+//                     },
                     vector<der>{
                         vector<der>{
                             obj_id_sha1,
