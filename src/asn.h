@@ -74,10 +74,18 @@ public:
 
     template<typename T>
     void emplace(const T& t) {
-        if (type != der_type::sequence)
-            throw std::runtime_error("Cannot call der::push_back unless SEQUENCE.");
+        switch (type) {
+            case der_type::sequence:
+                std::get<std::vector<der>>(value).emplace_back(t);
+            break;
 
-        std::get<std::vector<der>>(value).emplace_back(t);
+            case der_type::set:
+                std::get<der_set>(value).els.emplace_back(t);
+            break;
+
+            default:
+                throw std::runtime_error("Cannot call der::push_back unless SEQUENCE or SET.");
+        }
     }
 
     void dump(std::ostream& out) const;

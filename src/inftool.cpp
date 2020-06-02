@@ -1,5 +1,7 @@
 #include "asn.h"
 #include <sstream>
+#include <span>
+#include <array>
 
 using namespace std;
 
@@ -8,6 +10,7 @@ static const obj_id ms_cert_trust_list{1, 3, 6, 1, 4, 1, 311, 10, 1};
 static const obj_id ms_catalogue_list{1, 3, 6, 1, 4, 1, 311, 12, 1, 1};
 static const obj_id ms_catalogue_list_member{1, 3, 6, 1, 4, 1, 311, 12, 1, 2};
 static const obj_id ms_catalogue_name_value{1, 3, 6, 1, 4, 1, 311, 12, 2, 1};
+static const obj_id ms_catalogue_member_info{1, 3, 6, 1, 4, 1, 311, 12, 2, 2};
 
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
@@ -416,8 +419,63 @@ static void add_kv_item(der& store, const u16string& key, const u16string& value
     store.emplace(seq);
 }
 
+static char16_t u16_digit(unsigned int num) {
+    if (num < 10)
+        return (char16_t)(num + u'0');
+    else
+        return (char16_t)(num - 10 + u'A');
+}
+
+static void add_file(der& seq, const u16string& fn, const u16string& os_attr, const span<uint8_t>& hash) {
+    der set{der_set{}};
+    u16string tag;
+
+    tag.reserve(hash.size() * 2);
+    for (const auto& h : hash) {
+        tag += u16_digit(h >> 4);
+        tag += u16_digit(h & 0xf);
+    }
+
+    add_kv_item(set, u"File", fn, false);
+
+    set.emplace(
+        vector<der>{
+            ms_catalogue_member_info,
+            der_set{
+                vector<der>{
+                    u"{C689AAB8-8E78-11D0-8C47-00C04FC295EE}"s,
+                    512
+                }
+            }
+        }
+    );
+
+//     SEQUENCE (2 elem)
+//         OBJECT IDENTIFIER 1.3.6.1.4.1.311.2.1.4 spcIndirectDataContext (Microsoft code signing)
+//         SET (1 elem)
+//             SEQUENCE (2 elem)
+//                 SEQUENCE (2 elem)
+//                     OBJECT IDENTIFIER 1.3.6.1.4.1.311.2.1.15 spcPEImageData (Microsoft code signing)
+//                     SEQUENCE (2 elem)
+//                     BIT STRING (3 bit) 101
+//                     [0] (1 elem)
+//                         [2] (1 elem)
+//                             [0] (28 byte) 003C003C003C004F00620073006F006C006500740065003E003E003E
+//                 SEQUENCE (2 elem)
+//                     SEQUENCE (2 elem)
+//                         OBJECT IDENTIFIER 1.3.14.3.2.26 sha1 (OIW)
+//                         NULL
+//                     OCTET STRING (20 byte) 12098E4F375CE67D9736D24343431EE7BEFEC23E
+
+    add_kv_item(set, u"OSAttr", os_attr, false);
+
+    seq.emplace(vector<der>{octet_string{tag}, set});
+}
+
 static void main2() {
     der cert_trust_list{vector<der>{}};
+
+    static const u16string os_attr = u"2:5.1,2:5.2,2:6.0,2:6.1,2:6.2,2:6.3,2:10.0";
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list});
     cert_trust_list.emplace(octet_string{"\x5E\x0B\x52\x27\xB8\x66\xB1\x44\xA4\x50\xDF\xAA\x15\x4B\x67\x1B"}); // FIXME - hash? ("list identifier")
@@ -425,7 +483,10 @@ static void main2() {
 
     cert_trust_list.emplace(vector<der>{ms_catalogue_list_member, nullptr});
 
-    der files{vector<der>{}}; // FIXME
+    der files{vector<der>{}};
+
+    array<uint8_t, 20> hash{ 0x12, 0x09, 0x8E, 0x4F, 0x37, 0x5C, 0xE6, 0x7D, 0x97, 0x36, 0xD2, 0x43, 0x43, 0x43, 0x1E, 0xE7, 0xBE, 0xFE, 0xC2, 0x3E };
+    add_file(files, u"shellbtrfs.dll", os_attr, hash);
 
     cert_trust_list.emplace(files);
 
