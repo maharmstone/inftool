@@ -1,16 +1,19 @@
 #include "asn.h"
 #include <sstream>
-#include <span>
 #include <array>
 
 using namespace std;
 
 static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
+static const obj_id obj_id_sha1{1, 3, 14, 3, 2, 26};
+
 static const obj_id ms_cert_trust_list{1, 3, 6, 1, 4, 1, 311, 10, 1};
 static const obj_id ms_catalogue_list{1, 3, 6, 1, 4, 1, 311, 12, 1, 1};
 static const obj_id ms_catalogue_list_member{1, 3, 6, 1, 4, 1, 311, 12, 1, 2};
 static const obj_id ms_catalogue_name_value{1, 3, 6, 1, 4, 1, 311, 12, 2, 1};
 static const obj_id ms_catalogue_member_info{1, 3, 6, 1, 4, 1, 311, 12, 2, 2};
+static const obj_id ms_indirect_data_context{1, 3, 6, 1, 4, 1, 311, 2, 1, 4};
+static const obj_id ms_spc_pe_image_data{1, 3, 6, 1, 4, 1, 311, 2, 1, 15};
 
 static unsigned int der_int_length(int64_t v) {
     if (v >= 0) {
@@ -313,6 +316,41 @@ void der::dump(ostream& out) const {
 
             break;
         }
+
+        case der_type::bit_string: {
+            uint8_t c = DER_BIT_STRING;
+            const auto& bs = get<bit_string>(value);
+            uint64_t v;
+
+            out.write((char*)&c, sizeof(unsigned char));
+            der_write_length(out, length());
+
+            c = 8 - (bs.bits % 8);
+
+            if (c == 8)
+                c = 0;
+
+            out.write((char*)&c, sizeof(unsigned char));
+
+            v = __builtin_bswap64(bs.value << c);
+
+            if (bs.bits <= 8)
+                out.write((char*)&v + 7, 1);
+            else if (bs.bits <= 16)
+                out.write((char*)&v + 6, 2);
+            else if (bs.bits <= 24)
+                out.write((char*)&v + 5, 3);
+            else if (bs.bits <= 32)
+                out.write((char*)&v + 4, 4);
+            else if (bs.bits <= 40)
+                out.write((char*)&v + 3, 5);
+            else if (bs.bits <= 48)
+                out.write((char*)&v + 2, 6);
+            else if (bs.bits <= 56)
+                out.write((char*)&v + 1, 7);
+            else
+                out.write((char*)&v, 8);
+        }
     }
 }
 
@@ -395,6 +433,12 @@ unsigned int der::length() const {
 
         case der_type::bmp_string:
             return (unsigned int)(get<u16string>(value).length() * sizeof(char16_t));
+
+        case der_type::bit_string: {
+            const auto& bs = get<bit_string>(value);
+
+            return ((bs.bits + 7) / 8) + 1;
+        }
     }
 
     return 0;
@@ -450,22 +494,31 @@ static void add_file(der& seq, const u16string& fn, const u16string& os_attr, co
         }
     );
 
-//     SEQUENCE (2 elem)
-//         OBJECT IDENTIFIER 1.3.6.1.4.1.311.2.1.4 spcIndirectDataContext (Microsoft code signing)
-//         SET (1 elem)
-//             SEQUENCE (2 elem)
-//                 SEQUENCE (2 elem)
-//                     OBJECT IDENTIFIER 1.3.6.1.4.1.311.2.1.15 spcPEImageData (Microsoft code signing)
-//                     SEQUENCE (2 elem)
-//                     BIT STRING (3 bit) 101
-//                     [0] (1 elem)
-//                         [2] (1 elem)
-//                             [0] (28 byte) 003C003C003C004F00620073006F006C006500740065003E003E003E
-//                 SEQUENCE (2 elem)
-//                     SEQUENCE (2 elem)
-//                         OBJECT IDENTIFIER 1.3.14.3.2.26 sha1 (OIW)
-//                         NULL
-//                     OCTET STRING (20 byte) 12098E4F375CE67D9736D24343431EE7BEFEC23E
+    set.emplace(
+        vector<der>{
+            ms_indirect_data_context,
+            der_set{
+                vector<der>{
+                    vector<der>{
+                        ms_spc_pe_image_data,
+                        vector<der>{
+                            bit_string(3, 5)
+//                         [0] (1 elem)
+//                             [2] (1 elem)
+//                                 [0] (28 byte) 003C003C003C004F00620073006F006C006500740065003E003E003E
+                        }
+                    },
+                    vector<der>{
+                        vector<der>{
+                            obj_id_sha1,
+                            nullptr
+                        },
+                        octet_string{hash}
+                    }
+                }
+            }
+        }
+    );
 
     add_kv_item(set, u"OSAttr", os_attr, false);
 

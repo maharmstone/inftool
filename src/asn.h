@@ -3,6 +3,7 @@
 #include <variant>
 #include <iostream>
 #include <chrono>
+#include <span>
 
 enum class der_type {
     sequence,
@@ -14,10 +15,12 @@ enum class der_type {
     null,
     octet_string,
     utc_time,
-    bmp_string
+    bmp_string,
+    bit_string
 };
 
 #define DER_INTEGER             0x02
+#define DER_BIT_STRING          0x03
 #define DER_OCTET_STRING        0x04
 #define DER_NULL                0x05
 #define DER_OBJ_ID              0x06
@@ -55,8 +58,17 @@ class octet_string {
 public:
     octet_string(const std::string& s) : s(s) { }
     octet_string(const std::u16string& us) : s((char*)us.data(), (us.length() + 1) * sizeof(char16_t)) { }
+    octet_string(const std::span<uint8_t>& s) : s((char*)s.data(), s.size()) { }
 
     std::string s;
+};
+
+class bit_string {
+public:
+    bit_string(unsigned int bits, uint64_t value) : bits(bits), value(value) { }
+
+    unsigned int bits;
+    uint64_t value;
 };
 
 class der {
@@ -71,6 +83,7 @@ public:
     der(const octet_string& os) : type(der_type::octet_string), value(os.s) { }
     der(const std::chrono::system_clock::time_point& time) : type(der_type::utc_time), value(time) { }
     der(const std::u16string& us) : type(der_type::bmp_string), value(us) { }
+    der(const bit_string& bs) : type(der_type::bit_string), value(bs) { }
 
     template<typename T>
     void emplace(const T& t) {
@@ -94,5 +107,6 @@ public:
 
     der_type type;
     std::variant<std::vector<der>, int64_t, std::string, obj_id, context_specific,
-                 der_set, std::chrono::system_clock::time_point, std::u16string> value;
+                 der_set, std::chrono::system_clock::time_point, std::u16string,
+                 bit_string> value;
 };
