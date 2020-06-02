@@ -4,6 +4,8 @@
 
 using namespace std;
 
+void hash_file(const string& fn);
+
 static const obj_id pkcs7_rsa{1, 2, 840, 113549, 1, 7, 2};
 static const obj_id obj_id_sha1{1, 3, 14, 3, 2, 26};
 
@@ -527,6 +529,9 @@ static void add_file(der& seq, const u16string& fn, const u16string& os_attr, co
 
 static void main2() {
     der cert_trust_list{vector<der>{}};
+
+    hash_file("/home/hellas/wine/fs/btrfs/package/1.7.3/Debug/x86/btrfs.sys");
+    return;
 
     static const u16string os_attr = u"2:5.1,2:5.2,2:6.0,2:6.1,2:6.2,2:6.3,2:10.0";
 
