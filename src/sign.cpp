@@ -3,6 +3,10 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/rand.h>
 #include "sha1.h"
 
 using namespace std;
@@ -188,4 +192,88 @@ void hash_file(const string& fn) {
            hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
            hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15],
            hash[16], hash[17], hash[18], hash[19]);
+}
+
+class x509_cert {
+public:
+    x509_cert(const string& fn) {
+        FILE* f;
+
+        f = fopen(fn.c_str(), "r");
+        if (!f)
+            throw runtime_error("Could not open certificate.");
+
+        cert = PEM_read_X509(f, nullptr, nullptr, nullptr);
+        if (!cert) {
+            fclose(f);
+            throw runtime_error("PEM_read_X509 failed");
+        }
+
+        fclose(f);
+    }
+
+    ~x509_cert() {
+        X509_free(cert);
+    }
+
+    operator X509*() {
+        return cert;
+    }
+
+private:
+    X509* cert;
+};
+
+class evp_pkey {
+public:
+    evp_pkey(const string& fn) {
+        FILE* f;
+
+        f = fopen(fn.c_str(), "r");
+        if (!f)
+            throw runtime_error("Could not open certificate.");
+
+        pkey = PEM_read_PrivateKey(f, nullptr, nullptr, nullptr);
+        if (!pkey) {
+            fclose(f);
+            throw runtime_error("PEM_read_PrivateKey failed");
+        }
+
+        fclose(f);
+    }
+
+    ~evp_pkey() {
+        EVP_PKEY_free(pkey);
+    }
+
+    operator EVP_PKEY*() {
+        return pkey;
+    }
+
+private:
+    EVP_PKEY* pkey;
+};
+
+void test_sign() {
+    PKCS7* pkcs7;
+
+    x509_cert cert("/home/hellas/wine/fs/inftool/certificate.crt");
+
+    evp_pkey priv_key("/home/hellas/wine/fs/inftool/privateKey.key");
+
+    // FIXME - form spcIndirectDataContext
+    // FIXME - use SHA1 rather than SHA256
+
+    pkcs7 = PKCS7_sign(cert, priv_key, nullptr, /*data*/nullptr, 0);
+    if (!pkcs7)
+        throw runtime_error("PKCS7_sign failed");
+
+    if (!i2d_PKCS7_fp(stdout, pkcs7)) {
+        PKCS7_free(pkcs7);
+        throw runtime_error("i2d_PKCS7_fp failed");
+    }
+
+    PKCS7_free(pkcs7);
+
+    // FIXME - embed in PE file
 }

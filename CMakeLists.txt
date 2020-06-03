@@ -11,6 +11,10 @@ set(SRC_FILES src/inftool.cpp
 
 add_executable(inftool ${SRC_FILES})
 
+find_package(OpenSSL REQUIRED)
+
+target_link_libraries(inftool ${OPENSSL_LIBRARIES})
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(inftool PRIVATE -Wall -Wextra -Wno-address-of-packed-member -Wconversion)
 endif()
