@@ -272,10 +272,38 @@ private:
     PKCS7* p7;
 };
 
+class openssl_error : public exception {
+public:
+    openssl_error(const string& func) {
+        unsigned long err;
+        char buf[256];
+
+        err = ERR_get_error();
+        ERR_error_string(err, buf);
+
+        msg = func + " failed: " + buf;
+    }
+
+    const char* what() const noexcept {
+        return msg.c_str();
+    }
+
+private:
+    string msg;
+};
+
 void test_sign() {
+    int content_nid;
+
+    content_nid = OBJ_create("1.3.6.1.4.1.311.2.1.4", "spcIndirectDataContext", "spcIndirectDataContext");
+
+    if (content_nid == NID_undef)
+        throw openssl_error("OBJ_create");
+
     x509_cert cert("/home/hellas/wine/fs/inftool/certificate.crt");
 
     evp_pkey priv_key("/home/hellas/wine/fs/inftool/privateKey.key");
+
 
     // FIXME - form spcIndirectDataContext
     // FIXME - use SHA1 rather than SHA256
@@ -283,19 +311,30 @@ void test_sign() {
     pkcs7 p7;
 
     if (!PKCS7_set_type(p7, NID_pkcs7_signed))
-        throw runtime_error("PKCS7_set_type failed");
+        throw openssl_error("PKCS7_set_type");
 
-    if (!PKCS7_content_new(p7, NID_pkcs7_data))
-        throw runtime_error("PKCS7_content_new failed");
+    {
+        PKCS7* content = PKCS7_new();
+
+        ASN1_TYPE* asn1 = ASN1_TYPE_new();
+
+        ASN1_TYPE_set(asn1, V_ASN1_BOOLEAN, (void*)true); // FIXME - SEQUENCE etc.
+
+        if (!PKCS7_set0_type_other(content, content_nid, asn1))
+            throw openssl_error("PKCS7_set0_type_other");
+
+        if (!PKCS7_set_content(p7, content))
+            throw openssl_error("PKCS7_set_content");
+    }
 
     if (!PKCS7_sign_add_signer(p7, cert, priv_key, nullptr, 0))
-        throw runtime_error("PKCS7_sign_add_signer failed");
+        throw openssl_error("PKCS7_sign_add_signer");
 
-    if (!PKCS7_final(p7, /*data*/nullptr, 0))
-        throw runtime_error("PKCS7_final failed");
+//     if (!PKCS7_final(p7, /*data*/nullptr, 0))
+//         throw openssl_error("PKCS7_final");
 
     if (!i2d_PKCS7_fp(stdout, p7))
-        throw runtime_error("i2d_PKCS7_fp failed");
+        throw openssl_error("i2d_PKCS7_fp");
 
     // FIXME - embed in PE file
 }
