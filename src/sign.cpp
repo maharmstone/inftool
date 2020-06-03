@@ -254,9 +254,25 @@ private:
     EVP_PKEY* pkey;
 };
 
-void test_sign() {
-    PKCS7* pkcs7;
+class pkcs7 {
+public:
+    pkcs7() {
+        p7 = PKCS7_new();
+    }
 
+    ~pkcs7() {
+        PKCS7_free(p7);
+    }
+
+    operator PKCS7*() {
+        return p7;
+    }
+
+private:
+    PKCS7* p7;
+};
+
+void test_sign() {
     x509_cert cert("/home/hellas/wine/fs/inftool/certificate.crt");
 
     evp_pkey priv_key("/home/hellas/wine/fs/inftool/privateKey.key");
@@ -264,16 +280,22 @@ void test_sign() {
     // FIXME - form spcIndirectDataContext
     // FIXME - use SHA1 rather than SHA256
 
-    pkcs7 = PKCS7_sign(cert, priv_key, nullptr, /*data*/nullptr, 0);
-    if (!pkcs7)
-        throw runtime_error("PKCS7_sign failed");
+    pkcs7 p7;
 
-    if (!i2d_PKCS7_fp(stdout, pkcs7)) {
-        PKCS7_free(pkcs7);
+    if (!PKCS7_set_type(p7, NID_pkcs7_signed))
+        throw runtime_error("PKCS7_set_type failed");
+
+    if (!PKCS7_content_new(p7, NID_pkcs7_data))
+        throw runtime_error("PKCS7_content_new failed");
+
+    if (!PKCS7_sign_add_signer(p7, cert, priv_key, nullptr, 0))
+        throw runtime_error("PKCS7_sign_add_signer failed");
+
+    if (!PKCS7_final(p7, /*data*/nullptr, 0))
+        throw runtime_error("PKCS7_final failed");
+
+    if (!i2d_PKCS7_fp(stdout, p7))
         throw runtime_error("i2d_PKCS7_fp failed");
-    }
-
-    PKCS7_free(pkcs7);
 
     // FIXME - embed in PE file
 }
