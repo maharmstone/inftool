@@ -7,6 +7,7 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
+#include <string.h>
 #include "sha1.h"
 
 using namespace std;
@@ -304,34 +305,120 @@ void test_sign() {
 
     evp_pkey priv_key("/home/hellas/wine/fs/inftool/privateKey.key");
 
-
     // FIXME - form spcIndirectDataContext
     // FIXME - use SHA1 rather than SHA256
+
+    BIO* mem = BIO_new(BIO_s_mem());
+    BIO_puts(mem, "hello");
 
     pkcs7 p7;
 
     if (!PKCS7_set_type(p7, NID_pkcs7_signed))
         throw openssl_error("PKCS7_set_type");
 
-    {
-        PKCS7* content = PKCS7_new();
-
-        ASN1_TYPE* asn1 = ASN1_TYPE_new();
-
-        ASN1_TYPE_set(asn1, V_ASN1_BOOLEAN, (void*)true); // FIXME - SEQUENCE etc.
-
-        if (!PKCS7_set0_type_other(content, content_nid, asn1))
-            throw openssl_error("PKCS7_set0_type_other");
-
-        if (!PKCS7_set_content(p7, content))
-            throw openssl_error("PKCS7_set_content");
-    }
+    if (!PKCS7_content_new(p7, NID_pkcs7_data))
+        throw openssl_error("PKCS7_content_new");
 
     if (!PKCS7_sign_add_signer(p7, cert, priv_key, nullptr, 0))
         throw openssl_error("PKCS7_sign_add_signer");
 
-//     if (!PKCS7_final(p7, /*data*/nullptr, 0))
-//         throw openssl_error("PKCS7_final");
+    if (!PKCS7_final(p7, mem, 0))
+        throw openssl_error("PKCS7_final");
+
+#if 0
+// //     {
+// //         PKCS7* content = PKCS7_new();
+// //
+// //         ASN1_TYPE* asn1 = ASN1_TYPE_new();
+// //
+// //         ASN1_TYPE_set(asn1, V_ASN1_BOOLEAN, (void*)true); // FIXME - SEQUENCE etc.
+// // //         ASN1_TYPE_set(asn1, V_ASN1_OCTET_STRING, strdup("hello")); // FIXME - SEQUENCE etc.
+// //
+// //         if (!PKCS7_set0_type_other(content, content_nid, asn1))
+// //             throw openssl_error("PKCS7_set0_type_other");
+// //
+// //         if (!PKCS7_set_content(p7, content))
+// //             throw openssl_error("PKCS7_set_content");
+// //     }
+
+//     {
+// //         BIO *p7bio;
+//
+// //         p7bio = PKCS7_dataInit(p7, nullptr);
+// //         if (!p7bio)
+// //             throw openssl_error("PKCS7_dataInit");
+//
+// //         SMIME_crlf_copy(/*data*/nullptr, p7bio, 0);
+//
+// //         BIO_flush(p7bio);
+//
+// //         if (!PKCS7_dataFinal(p7, nullptr)) {
+// //             BIO_free_all(p7bio);
+// //             throw openssl_error("PKCS7_dataFinal");
+// //         }
+//
+// //         BIO_free_all(p7bio);
+//     }
+//
+//     {
+//         STACK_OF(PKCS7_SIGNER_INFO) *si_sk=NULL;
+//
+//         si_sk=((PKCS7*)p7)->d.sign->signer_info;
+//
+//         for (int i=0; i<sk_PKCS7_SIGNER_INFO_num(si_sk); i++)
+//         {
+//             PKCS7_SIGNER_INFO *si=sk_PKCS7_SIGNER_INFO_value(si_sk,i);
+//             if (si->pkey == NULL)
+//                 continue;
+//
+// #if 0
+//             int j = OBJ_obj2nid(si->digest_alg->algorithm);
+//
+// //             btmp=bio;
+// //
+// //             btmp = PKCS7_find_digest(&mdc, btmp, j);
+// //
+// //             if (btmp == NULL)
+// //                 goto err;
+//
+//             /* We now have the EVP_MD_CTX, lets do the
+//              * signing. */
+//             if (!EVP_MD_CTX_copy_ex(&ctx_tmp,mdc))
+//                 goto err;
+//
+//             sk=si->auth_attr;
+//
+//             /* If there are attributes, we add the digest
+//              * attribute and only sign the attributes */
+//             if (sk_X509_ATTRIBUTE_num(sk) > 0)
+//             {
+//                 if (!do_pkcs7_signed_attrib(si, &ctx_tmp))
+//                     goto err;
+//             }
+//             else
+//             {
+//                 unsigned char *abuf = NULL;
+//                 unsigned int abuflen;
+//                 abuflen = EVP_PKEY_size(si->pkey);
+//                 abuf = OPENSSL_malloc(abuflen);
+//                 if (!abuf)
+//                     goto err;
+//
+//                 if (!EVP_SignFinal(&ctx_tmp, abuf, &abuflen,
+//                     si->pkey))
+//                 {
+//                     PKCS7err(PKCS7_F_PKCS7_DATAFINAL,
+//                              ERR_R_EVP_LIB);
+//                     goto err;
+//                 }
+//                 ASN1_STRING_set0(si->enc_digest, abuf, abuflen);
+//             }
+// #endif
+//         }
+//     }
+#endif
+
+//     PKCS7* p7 = PKCS7_sign(cert, priv_key, nullptr, mem, 0);
 
     if (!i2d_PKCS7_fp(stdout, p7))
         throw openssl_error("i2d_PKCS7_fp");
