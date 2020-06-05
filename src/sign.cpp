@@ -293,37 +293,20 @@ private:
     string msg;
 };
 
-static int pkcs_data_final(PKCS7 *p7, ASN1_STRING* seq) {
-    int ret = 0;
-    int i;
-    PKCS7_SIGNER_INFO *si;
-    EVP_MD_CTX *ctx_tmp;
-    STACK_OF(PKCS7_SIGNER_INFO) *si_sk = NULL;
+static void pkcs_data_final(PKCS7* p7, ASN1_STRING* seq) {
+    PKCS7_SIGNER_INFO* si;
+    STACK_OF(PKCS7_SIGNER_INFO)* si_sk;
 
-    if (p7 == NULL) {
-        PKCS7err(PKCS7_F_PKCS7_DATAFINAL, PKCS7_R_INVALID_NULL_POINTER);
-        return 0;
-    }
+    if (!p7->d.ptr)
+        throw runtime_error("p7->d.ptr was NULL");
 
-    if (p7->d.ptr == NULL) {
-        PKCS7err(PKCS7_F_PKCS7_DATAFINAL, PKCS7_R_NO_CONTENT);
-        return 0;
-    }
-
-    ctx_tmp = EVP_MD_CTX_new();
-    if (ctx_tmp == NULL) {
-        PKCS7err(PKCS7_F_PKCS7_DATAFINAL, ERR_R_MALLOC_FAILURE);
-        return 0;
-    }
-
-    i = OBJ_obj2nid(p7->type);
     p7->state = PKCS7_S_HEADER;
 
     si_sk = p7->d.sign->signer_info;
 
-    for (i = 0; i < sk_PKCS7_SIGNER_INFO_num(si_sk); i++) {
+    for (int i = 0; i < sk_PKCS7_SIGNER_INFO_num(si_sk); i++) {
         si = sk_PKCS7_SIGNER_INFO_value(si_sk, i);
-        if (si->pkey == NULL)
+        if (!si->pkey)
             continue;
 
 //         int j = OBJ_obj2nid(si->digest_alg->algorithm);
@@ -345,20 +328,13 @@ static int pkcs_data_final(PKCS7 *p7, ASN1_STRING* seq) {
 
         SHA256(p, len, md_data); // FIXME - use specified algorithm
 
-        if (!PKCS7_add1_attrib_digest(si, md_data, md_len)) {
-            PKCS7err(PKCS7_F_DO_PKCS7_SIGNED_ATTRIB, ERR_R_MALLOC_FAILURE);
-            return 0;
-        }
+        if (!PKCS7_add1_attrib_digest(si, md_data, md_len))
+            throw runtime_error("PKCS7_add1_attrib_digest failed");
 
         /* Now sign the attributes */
         if (!PKCS7_SIGNER_INFO_sign(si))
-            return 0;
+            throw openssl_error("PKCS7_SIGNER_INFO_sign");
     }
-
-    ret = 1;
-
-    EVP_MD_CTX_free(ctx_tmp);
-    return ret;
 }
 
 void test_sign() {
@@ -401,8 +377,7 @@ void test_sign() {
     if (!PKCS7_sign_add_signer(p7, cert, priv_key, nullptr, 0))
         throw openssl_error("PKCS7_sign_add_signer");
 
-    if (!pkcs_data_final(p7, str))
-        throw openssl_error("pkcs_data_final");
+    pkcs_data_final(p7, str);
 
     if (!i2d_PKCS7_fp(stdout, p7))
         throw openssl_error("i2d_PKCS7_fp");
